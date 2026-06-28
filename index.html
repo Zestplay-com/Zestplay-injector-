@@ -33,7 +33,7 @@
     <h2>🚀 ZestPlay Universal Injector</h2>
     <div id="status-alert"></div>
 
-    <!-- TYPE SELECTOR & SEARCH SEARCH -->
+    <!-- TYPE SELECTOR & SMART SEARCH -->
     <label>Search Content Type</label>
     <div class="row">
         <select id="search_type" style="width: 130px;">
@@ -49,7 +49,7 @@
 
     <!-- FINAL VERIFICATION OUTPUTS -->
     <label>Final Post Title (You can manually edit this for Episodes)</label>
-    <input type="text" id="final_title" placeholder="e.g., Movie Name (2026) [TMDB: 12345]" required>
+    <input type="text" id="final_title" placeholder="e.g., Movie Name (2026)" required>
 
     <label>DoodStream Stream/Download URL</label>
     <input type="url" id="download_url" placeholder="Paste your target https://doodstream.com/d/... link here" required>
@@ -87,17 +87,15 @@ async function fetchTMDBData() {
         if (searchData.results && searchData.results.length > 0) {
             const item = searchData.results[0];
             
-            // Handle different naming styles between Movies (title) and Series (name)
             const name = type === 'movie' ? item.title : item.name;
             const dateField = type === 'movie' ? item.release_date : item.first_air_date;
             const year = dateField ? dateField.split('-')[0] : 'N/A';
             
-            document.getElementById('final_title').value = `${name} (${year}) [TMDB: ${item.id}]`;
+            document.getElementById('final_title').value = `${name} (${year})`;
             document.getElementById('meta_year').value = year;
             document.getElementById('meta_plot').value = item.overview || 'No storyline details recorded.';
             document.getElementById('meta_poster').value = item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : '';
 
-            // Deep fetch for trailers and cast details
             const detailRes = await fetch(`https://api.themoviedb.org/3/${type}/${item.id}?api_key=${CONFIG.tmdbKey}&append_to_response=credits,videos`);
             const details = await detailRes.json();
 
@@ -141,22 +139,46 @@ async function publishToWordPress() {
         return;
     }
 
-    showAlert("Injecting data straight into WordPress Posts feed...", "msg-info");
+    showAlert("Injecting data straight into WordPress...", "msg-info");
     const credentials = btoa(`${CONFIG.username}:${CONFIG.appPassword}`);
     
+    // GATHER ALL TRACKED METADATA VARIABLES
+    const poster = document.getElementById('meta_poster').value;
+    const plot = document.getElementById('meta_plot').value;
+    const trailer = document.getElementById('meta_trailer').value;
+    const genre = document.getElementById('meta_genre').value;
+    const stars = document.getElementById('meta_stars').value;
+
+    // BUILD A BEAUTIFUL HTML LAYOUT DIRECTLY INSIDE THE MAIN CONTENT FIELD
+    let postHtmlContent = '';
+    
+    if (poster) {
+        postHtmlContent += `<p style="text-align:center;"><img src="${poster}" alt="${title}" style="max-width:100%; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.1);"></p>`;
+    }
+    
+    postHtmlContent += `<h3>Storyline</h3><p>${plot}</p>`;
+    
+    if (genre || stars) {
+        postHtmlContent += `<p><strong>Genre:</strong> ${genre}<br><strong>Cast:</strong> ${stars}</p><hr>`;
+    }
+
+    if (trailer) {
+        postHtmlContent += `<h3>Official Trailer</h3><p><a href="${trailer}" target="_blank" style="color:#e50914; font-weight:bold;">Watch Trailer on YouTube</a></p>`;
+    }
+
+    // THE STREAM LINK PLACEMENT
+    postHtmlContent += `
+    <div style="margin:20px 0; text-align:center;">
+        <a href="${downloadUrl}" target="_blank" style="background:#e50914; color:#fff; padding:12px 24px; text-decoration:none; font-weight:bold; border-radius:4px; display:inline-block; box-shadow:0 4px 10px rgba(229,9,20,0.4);">
+            🎬 STREAM / DOWNLOAD NOW
+        </a>
+    </div>
+    <!-- dstream -->${downloadUrl}`;
+
     const payload = {
         title: title,
-        status: 'publish',
-        content: `<!-- dstream -->${downloadUrl}`,
-        meta: {
-            zp_poster_url: document.getElementById('meta_poster').value,
-            zp_download_url: downloadUrl,
-            zp_plot: document.getElementById('meta_plot').value,
-            zp_trailer_url: document.getElementById('meta_trailer').value,
-            zp_genre: document.getElementById('meta_genre').value,
-            zp_stars: document.getElementById('meta_stars').value,
-            zp_release_date: document.getElementById('meta_year').value
-        }
+        status: 'publish', // Forces status to publish directly
+        content: postHtmlContent
     };
 
     try {
